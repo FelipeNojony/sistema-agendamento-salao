@@ -187,4 +187,70 @@ export async function salonRoutes(fastify) {
       return reply.status(500).send({ error: 'Erro ao criar bloqueio.' });
     }
   });
+
+  // ==========================================================================
+  // 6. Editar dados cadastrais de uma unidade (requer autenticação JWT)
+  // ==========================================================================
+
+fastify.patch('/salons/:id', { preHandler: [authenticate] }, async (request, reply) => {
+  const { id } = request.params;
+  const { name, slug, address, phone } = request.body;
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE salons
+       SET name = COALESCE($1, name),
+           slug = COALESCE($2, slug),
+           address = COALESCE($3, address),
+           phone = COALESCE($4, phone)
+       WHERE id = $5
+       RETURNING id, name, slug, address, phone, is_active`,
+      [name, slug, address, phone, id]
+    );
+
+    if (rows.length === 0) {
+      return reply.status(404).send({ error: 'Unidade não encontrada.' });
+    }
+
+    return { salon: rows[0] };
+  } catch (err) {
+    if (err.code === '23505') {
+      return reply.status(409).send({ error: 'Já existe outra unidade usando este slug.' });
+    }
+    throw err;
+  }
+});
+
+// ==========================================================================
+  // 7. Excluir dados cadastrais de uma unidade (requer autenticação JWT)
+  // ==========================================================================
+
+fastify.delete('/salons/:id', async (request, reply) => {
+    const { id } = request.params;
+
+    try {
+      // Remove registros dependentes antes de excluir a unidade
+      await query('DELETE FROM appointment_logs WHERE appointment_id IN (SELECT id FROM appointments WHERE salon_id = $1)', [id]);
+      await query('DELETE FROM appointments WHERE salon_id = $1', [id]);
+      await query('DELETE FROM time_offs WHERE salon_id = $1', [id]);
+      await query('DELETE FROM business_hours WHERE salon_id = $1', [id]);
+      await query('DELETE FROM services WHERE salon_id = $1', [id]);
+      await query('DELETE FROM professionals WHERE salon_id = $1', [id]);
+
+      const { rows } = await query(
+        'DELETE FROM salons WHERE id = $1 RETURNING id, name',
+        [id]
+      );
+
+      if (rows.length === 0) {
+        return reply.status(404).send({ error: 'Unidade não encontrada.' });
+      }
+
+      return { message: 'Unidade removida com sucesso.', salon: rows[0] };
+    } catch (error) {
+      request.log.error(error);
+      return reply.status(500).send({ error: 'Erro ao excluir unidade.' });
+    }
+  });
 }
+

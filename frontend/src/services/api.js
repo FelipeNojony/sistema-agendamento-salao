@@ -31,6 +31,8 @@ export const api = {
   // Salões, Serviços e Profissionais
   getSalons: () => request('/salons'),
   createSalon: (body) => request('/salons', { method: 'POST', body: JSON.stringify(body) }),
+  updateSalon: (id, data) => request(`/salons/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+deleteSalon: (id) => request(`/salons/${id}`, { method: 'DELETE', body: JSON.stringify({}) }),
   getServices: (salonId) => request(`/salons/${salonId}/services`),
   createService: (salonId, body) => request(`/salons/${salonId}/services`, { method: 'POST', body: JSON.stringify(body) }),
   getProfessionals: (salonId) => request(`/salons/${salonId}/professionals`),
